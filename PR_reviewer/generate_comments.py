@@ -9,7 +9,13 @@ def extract_document(source_file):
     text = ""
     with open(file=source_file, mode='r', encoding='utf-8') as file:
         text = file.read()
-    return text
+
+    lines_list = []
+    for i, line in enumerate(text.splitlines()):
+        lines_list.append(f"{i+1}: " + line)
+
+    return "\n".join(lines_list)
+
 
 if __name__ == "__main__":
 
@@ -21,7 +27,8 @@ if __name__ == "__main__":
                 2. Suggest **potential improvements** or optimizations, including performance enhancements, simplifications, or better use of language features.
                 3. Recommend **refactoring opportunities** where applicable, and explain why they would help.
                 4. When suggesting changes, Make sure to always **specify the exact lines of code** and the involved function, as your comments will be commented on the code
-                using the line references. Show the previous and improved version. This also apply for typo fixes.
+                using the line references. I provided the line number before every line of code, refer to this line numbers.
+                Show the previous and improved version. This also apply for typo fixes.
                 5. If the code is already well-written and you don't see anything to improve, simply respond: 
                    *“The changes are good to me.”*
                 
