@@ -9,29 +9,31 @@ import uuid
 # Constants
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
+DOCUMENTS_TO_RETRIEVE = 3
+OLLAMA_EMBEDDINGS_URL = "http://localhost:11434/api/embeddings"
 
 
 class SimpleModelSelector:
     """Simple class to handle model selection"""
 
+    # Available embedding models with their dimensions
+    embedding_models = {
+        "ollama": {
+            "name": "All mini LM",
+            "dimensions": 384,
+            "model_name": "all-minilm",
+        },
+        "chroma": {"name": "Chroma Default", "dimensions": 384, "model_name": None},
+        "nomic": {
+            "name": "Nomic Embed Text",
+            "dimensions": 768,
+            "model_name": "nomic-embed-text",
+        },
+    }
+
     def __init__(self):
         # Available LLM models
         self.llm_models = {"deep_seek": "Deepseek-r1", "ollama": "Llama3.2"}
-
-        # Available embedding models with their dimensions
-        self.embedding_models = {
-            "ollama": {
-                "name": "All mini LM",
-                "dimensions": 384,
-                "model_name": "all-minilm",
-            },
-            "chroma": {"name": "Chroma Default", "dimensions": 384, "model_name": None},
-            "nomic": {
-                "name": "Nomic Embed Text",
-                "dimensions": 768,
-                "model_name": "nomic-embed-text",
-            },
-        }
 
     def select_models(self):
         """Let user select models through Streamlit UI"""
@@ -94,7 +96,7 @@ class SimplePDFProcessor:
 
             chunks.append(
                 {
-                    "id": str(uuid.uuid4()),  # cdefield24482kuy
+                    "id": str(uuid.uuid4()),
                     "text": chunk,
                     "metadata": {"source": pdf_file.name},
                 }
@@ -125,13 +127,13 @@ class SimpleRAGSystem:
         try:
             if self.embedding_model == "ollama":
                 self.embedding_fn = embedding_functions.OllamaEmbeddingFunction(
-                    url='http://localhost:11434/api/embeddings',
+                    url=OLLAMA_EMBEDDINGS_URL,
                     model_name="all-minilm" 
                 )
             elif self.embedding_model == "nomic":
                 # For Nomic embeddings via Ollama
                 self.embedding_fn = embedding_functions.OllamaEmbeddingFunction(
-                  url='http://localhost:11434/api/embeddings',
+                  url=OLLAMA_EMBEDDINGS_URL,
                     model_name="nomic-embed-text" 
                 )
             else:  # chroma default
@@ -153,7 +155,7 @@ class SimpleRAGSystem:
                 st.info(
                     f"Using existing collection for {self.embedding_model} embeddings"
                 )
-            except:
+            except Exception as e:
                 # If collection doesn't exist, create new one
                 collection = self.db.create_collection(
                     name=collection_name,
@@ -188,7 +190,7 @@ class SimpleRAGSystem:
             st.error(f"Error adding documents: {str(e)}")
             return False
 
-    def query_documents(self, query, n_results=3):
+    def query_documents(self, query, n_results=DOCUMENTS_TO_RETRIEVE):
         """Query documents and return relevant chunks"""
         try:
             # Ensure collection exists
@@ -213,12 +215,12 @@ class SimpleRAGSystem:
             Question: {query}
 
             Answer:
-            """
+            """.strip()
             model = 'llama3.2' if self.llm_model == 'ollama' else 'deepseek-r1'
             messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt},
-                ]
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ]
             response = ollama.chat(model=model, messages=messages)
             
             return response['message']['content']
@@ -228,8 +230,7 @@ class SimpleRAGSystem:
 
     def get_embedding_info(self):
         """Get information about current embedding model"""
-        model_selector = SimpleModelSelector()
-        model_info = model_selector.embedding_models[self.embedding_model]
+        model_info = SimpleModelSelector.embedding_models[self.embedding_model]
         return {
             "name": model_info["name"],
             "dimensions": model_info["dimensions"],
