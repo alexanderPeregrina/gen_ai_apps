@@ -1,0 +1,17 @@
+# .github/workflows/label-trigger.yml
+name: Trigger Agent on Label
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  trigger-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check label
+        if: contains(github.event.label.name, 'review-agent')
+        run: |
+          echo "Triggering agent for PR #${{ github.event.pull_request.number }}"
+          curl -H "Authorization: Bearer ${{ secrets.AGENT_TOKEN }}" \
+                "https://flecky-marlena-unbalanced.ngrok-free.dev/review?pr=${{ github.event.pull_request.number }}"
