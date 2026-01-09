@@ -18,11 +18,6 @@ class SimpleModelSelector:
 
     # Available embedding models with their dimensions
     embedding_models = {
-        "ollama": {
-            "name": "All mini LM",
-            "dimensions": 384,
-            "model_name": "all-minilm",
-        },
         "chroma": {"name": "Chroma Default", "dimensions": 384, "model_name": None},
         "nomic": {
             "name": "Nomic Embed Text",
@@ -33,7 +28,7 @@ class SimpleModelSelector:
 
     def __init__(self):
         # Available LLM models
-        self.llm_models = {"deep_seek": "Deepseek-r1", "ollama": "Llama3.2"}
+        self.llm_models = {"qwen3-vl:235b-cloud": "qwen_vl", "gpt-oss:120b-cloud": "Open-AI-gpt-oss"}
 
     def select_models(self):
         """Let user select models through Streamlit UI"""
@@ -125,12 +120,7 @@ class SimpleRAGSystem:
     def setup_embedding_function(self):
         """Setup the appropriate embedding function"""
         try:
-            if self.embedding_model == "ollama":
-                self.embedding_fn = embedding_functions.OllamaEmbeddingFunction(
-                    url=OLLAMA_EMBEDDINGS_URL,
-                    model_name="all-minilm" 
-                )
-            elif self.embedding_model == "nomic":
+            if self.embedding_model == "nomic":
                 # For Nomic embeddings via Ollama
                 self.embedding_fn = embedding_functions.OllamaEmbeddingFunction(
                   url=OLLAMA_EMBEDDINGS_URL,
@@ -190,13 +180,18 @@ class SimpleRAGSystem:
             st.error(f"Error adding documents: {str(e)}")
             return False
 
-    def query_documents(self, query, n_results=DOCUMENTS_TO_RETRIEVE):
+    def query_documents(self, query, pdf_filename, n_results=DOCUMENTS_TO_RETRIEVE, ):
         """Query documents and return relevant chunks"""
         try:
             # Ensure collection exists
             if not self.collection:
                 raise ValueError("No collection available")
 
+
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=n_results,
+            where={"source": pdf_filename})
             results = self.collection.query(query_texts=[query], n_results=n_results)
             return results
         except Exception as e:
@@ -216,12 +211,12 @@ class SimpleRAGSystem:
 
             Answer:
             """.strip()
-            model = 'llama3.2' if self.llm_model == 'ollama' else 'deepseek-r1'
+
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
             ]
-            response = ollama.chat(model=model, messages=messages)
+            response = ollama.chat(model=self.llm_model, messages=messages)
             
             return response['message']['content']
         except Exception as e:
@@ -239,7 +234,7 @@ class SimpleRAGSystem:
 
 
 def main():
-    st.title("🤖 Simple RAG System")
+    st.title("🤖 Simple PDF RAG System")
 
     # Initialize session state
     if "processed_files" not in st.session_state:
@@ -304,7 +299,7 @@ def main():
         if query:
             with st.spinner("Generating response..."):
                 # Get relevant chunks
-                results = st.session_state.rag_system.query_documents(query)
+                results = st.session_state.rag_system.query_documents(query, pdf_file.name)
                 if results and results["documents"]:
                     # Generate response
                     response = st.session_state.rag_system.generate_response(
