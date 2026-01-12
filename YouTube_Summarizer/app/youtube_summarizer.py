@@ -9,21 +9,64 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.documents import Document
 from imageio_ffmpeg import get_ffmpeg_exe
+from chromadb.utils import embedding_functions
+
 import yt_dlp
 import whisper
 import streamlit as st
 import nest_asyncio
-import asyncio
 # Patch event loop to avoid RuntimeError
 nest_asyncio.apply()
 
 import os
 
+OLLAMA_EMBEDDINGS_URL = "http://localhost:11434/embeddings"
+
+class SimpleModelSelector:
+    """Simple class to handle model selection"""
+
+    # Available embedding models with their dimensions
+    embedding_models = {
+ 
+        "nomic-embed-text": {
+            "name": "Nomic Embed Text",
+            "dimensions": 768,
+            "model_name": "nomic-embed-text",
+        },
+        "all-minilm": {"name": "all-minilm", "dimensions": 384, "model_name": None},
+    }
+
+    def __init__(self):
+        # Available LLM models
+        self.llm_models = {"qwen3-vl:235b-cloud": "qwen_vl", "gpt-oss:120b-cloud": "Open-AI-gpt-oss"}
+
+    def select_models(self):
+        """Let user select models through Streamlit UI"""
+        st.sidebar.title("📚 Model Selection")
+
+        # Select LLM
+        llm = st.sidebar.radio(
+            "Choose LLM Model:",
+            options=list(self.llm_models.keys()),
+            format_func=lambda x: self.llm_models[x],
+            key ="llm_selector"
+        )
+
+        # Select Embeddings
+        embedding = st.sidebar.radio(
+            "Choose Embedding Model:",
+            options=list(self.embedding_models.keys()),
+            format_func=lambda x: self.embedding_models[x]["name"],
+            key="embedding_selector"
+        )
+
+        return llm, embedding
+
 class LLMModels():
-    """This class contains all required functionis and attributes to generate the RAG workflow pipeline. 
+    """This class contains all required functions and attributes to generate the RAG workflow pipeline. 
        It handles the split of documents, generates the vector database and sets up the QA chain
     """
-    def __init__(self, llm_model_name = 'llama3.2', embedding_model_name = 'nomic-embed-text'):
+    def __init__(self, llm_model_name = 'qwen3-vl:235b-cloud', embedding_model_name = 'nomic-embed-text'):
         """ Init the LLM class object
 
         Args:
@@ -49,7 +92,7 @@ class LLMModels():
             video_title (str): Title of if video to be used to name the vector database.
 
         Returns:
-            List(Document): List of documents (chunks) obtanied from input text 
+            List(Document): List of documents (chunks) obtained from input text 
         """
         print("Setting up knowledge base ...")
         documents = self.__generate_documents(text, video_title)
@@ -57,20 +100,9 @@ class LLMModels():
         return documents
         
     def generate_summary(self, documents):
-        """  Gnenerates summary based on documents using a summary chain """
+        """  Generates summary based on documents using a summary chain """
         print("Generating summary ...")
-        map_prompt = ChatPromptTemplate.from_template(
-        """Write a concise summary of the following transcript {text}
-           CONCISE SUMMARY:""")
-        combine_prompt = ChatPromptTemplate.from_template(
-        """Write a detailed summary of the following transcipt {text}
-            Include: 
-                - Main topics and key points
-                - Important details and examples
-                - Any conclusions or call to action
-            DETAILED SUMMARY:
-        """)
-        summary_chain = load_summarize_chain(llm=self.llm, chain_type='map_reduce', verbose=True, map_prompt= map_prompt, combine_prompt= combine_prompt)
+        summary_chain = load_summarize_chain(llm=self.llm, chain_type='stuff', verbose=False)
         return summary_chain.invoke(documents)
     
     def ask_model(self, question):
@@ -91,7 +123,11 @@ class LLMModels():
             
     # private functions
     def __generate_documents(self, text, video_title):
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100, separators=[" ", "\n\n", "\n", ". ", ""])
+        if self.embedding_model_name == "all-miniLM":
+            chunk_size = 800
+        else:
+            chunk_size = 2000
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=50, separators=[" ", "\n\n", "\n", ". ", ""])
         
         chunks = text_splitter.split_text(text=text)
         
@@ -137,10 +173,10 @@ class YoutubeSummarizer():
         
         print("Audio file path:", file_name)
         print("File exists:", os.path.exists(file_name))
-
+        st.info("Transcribing audio ...")
         text = self.__transcribe_audio(file_name)
-        documents = llm_model.setup_knowledge_base(text['text'], "the_doors")
-        st.success("Vector Database succesfully created")
+        documents = llm_model.setup_knowledge_base(text['text'], file_name)
+        st.success("Vector Database successfully created")
         summary = llm_model.generate_summary(documents)
         return summary
 
@@ -150,18 +186,18 @@ class YoutubeSummarizer():
             with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 title = info.get('title', 'audio')
-                filename = 'audio.mp3'
+                filename = ydl.prepare_filename(info)
+                filename = os.path.splitext(filename)[0] + ".mp3"
                 st.success(f"{title} video completely downloaded")
             return filename
-
         except Exception as e:
             st.error(f"Error while downloading video: {str(e)}")
             raise e
-            
+        
     def __transcribe_audio(self, audio_path):
         try:
             print(f"Transcribing {audio_path}")
-            model = whisper.load_model("base")
+            model = whisper.load_model("small")
             result = model.transcribe(audio_path)
             os.remove(audio_path)
             st.success(f"Transcription completed!")
@@ -170,69 +206,81 @@ class YoutubeSummarizer():
             print(f"Error transcribing audio: {str(e)}")
             st.error(f"Error transcribing audio: {str(e)}")
             raise e
-        
-
-
 def main():
     st.title("🤖 YouTube Summarizer")
 
+    # --- Always render model selectors ---
+    model_selector = SimpleModelSelector()
+    llm_model_name, embedding_model_name = model_selector.select_models()
+
+    # --- Initialize session state if not set ---
     if "llm_model" not in st.session_state:
-        restart_llm_models()
-    if "last_url" not in st.session_state:
+        st.session_state.llm_model = LLMModels(llm_model_name, embedding_model_name)
         st.session_state.last_url = None
+        st.session_state.yt_summarizer = None
+        st.session_state.summary = None
+        st.session_state.question = None
+        st.session_state.answer = None
 
-    # Display model info
-    try:
-        st.sidebar.info(
-             f"LLM Models info:\n"
-             f"- LLM model name: {st.session_state.llm_model.llm_model_name}\n"
-             f"- Embedding model name: {st.session_state.llm_model.embedding_model_name}"
-        )
-    except Exception as e:
-        st.error(f"Error initializing LLM model: {str(e)}")
-        return
+    # --- Sidebar info ---
+    st.sidebar.info(
+        f"LLM Models info:\n"
+        f"- LLM model name: {st.session_state.llm_model.llm_model_name}\n"
+        f"- Embedding model name: {st.session_state.llm_model.embedding_model_name}"
+    )
 
+    # --- Main UI ---
     url = st.text_input("🔍 Insert a YouTube video URL")
     if url:
         if st.button("Process Video") and st.session_state.last_url != url:
-            restart_llm_models()
+            # Restart models with current selector values
+            restart_llm_models(llm_model_name, embedding_model_name)
             st.session_state.last_url = url
 
             try:
                 st.session_state.yt_summarizer = YoutubeSummarizer(url)
                 with st.spinner("Processing video..."):
-                    st.session_state.summary = st.session_state.yt_summarizer.process_video(st.session_state.llm_model)
+                    st.session_state.summary = st.session_state.yt_summarizer.process_video(
+                        st.session_state.llm_model
+                    )
                     st.success("Video processed successfully!")
-                    last_url = url
             except Exception as e:
                 st.error(f"Error processing video: {str(e)}")
-
-    # Display summary and Q&A
+    
+    # --- Summary and Q&A ---
     if st.session_state.summary:
         st.markdown("### 📝 Summary:")
         st.write(st.session_state.summary["output_text"])
-        question = st.text_input("Ask a related question:")
-        st.session_state.question = question
-        
-    if st.session_state.question:
-        if st.button("Generate response"): 
-            with st.spinner("Generating response..."):
-                try:
-                    st.session_state.answer = st.session_state.llm_model.ask_model(st.session_state.question)                    
-                except Exception as e:
-                    st.error(f"Error generating answer: {str(e)}")
-                    
-    if st.session_state.answer:
-        st.markdown("### 💬 Answer:")
-        st.write(st.session_state.answer["answer"])
-                    
-def restart_llm_models():
-    # Initialize session state
-        st.session_state.llm_model = LLMModels()
-        st.session_state.yt_summarizer = None
-        st.session_state.summary = None
-        st.session_state.question = None
-        st.session_state.answer = None
+    
+        # Keep asking questions until a new URL is entered
+        question = st.text_input("Ask a related question:", key="qa_input")
+    
+        if question:
+            if st.button("Generate response", key="qa_button"):
+                with st.spinner("Generating response..."):
+                    try:
+                        st.session_state.answer = st.session_state.llm_model.ask_model(question)
+                        st.session_state.question = question
+                    except Exception as e:
+                        st.error(f"Error generating answer: {str(e)}")
+    
+        # Show last answer if available
+        if "answer" in st.session_state and st.session_state.answer:
+            st.markdown("### 💬 Answer:")
+            st.write(st.session_state.answer["answer"])
+    
+    
+
+def restart_llm_models(llm_model_name, embedding_model_name):
+    """Reinitialize models with current selector values"""
+    st.session_state.llm_model = LLMModels(
+        llm_model_name=llm_model_name,
+        embedding_model_name=embedding_model_name
+    )
+    st.session_state.yt_summarizer = None
+    st.session_state.summary = None
+    st.session_state.question = None
+    st.session_state.answer = None
                        
 if __name__ == "__main__":
     main()
