@@ -5,13 +5,16 @@ from chromadb.utils import embedding_functions
 import os
 import PyPDF2
 import uuid
+import requests
 
 # Constants
 CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
+CHUNK_OVERLAP = 50
 DOCUMENTS_TO_RETRIEVE = 3
 OLLAMA_EMBEDDINGS_URL = "http://localhost:11434/api/embeddings"
 
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY") 
+headers = {"Authorization": f"Bearer {OLLAMA_API_KEY}"}
 
 class SimpleModelSelector:
     """Simple class to handle model selection"""
@@ -109,7 +112,7 @@ class SimpleRAGSystem:
         self.llm_model = llm_model
 
         # Initialize ChromaDB
-        self.db = chromadb.PersistentClient(path="./chroma_db")
+        self.db = chromadb.Client()
 
         # Setup embedding function based on model
         self.setup_embedding_function()
@@ -180,7 +183,7 @@ class SimpleRAGSystem:
             st.error(f"Error adding documents: {str(e)}")
             return False
 
-    def query_documents(self, query, pdf_filename, n_results=DOCUMENTS_TO_RETRIEVE, ):
+    def query_documents(self, query, pdf_filename, n_results=DOCUMENTS_TO_RETRIEVE):
         """Query documents and return relevant chunks"""
         try:
             # Ensure collection exists
@@ -216,11 +219,14 @@ class SimpleRAGSystem:
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
             ]
-            response = ollama.chat(model=self.llm_model, messages=messages)
-            
+            response = ollama.chat(
+                model=self.llm_model,
+                messages=messages)
+
             return response['message']['content']
         except Exception as e:
             st.error(f"Error generating response: {str(e)}")
+
             return None
 
     def get_embedding_info(self):
@@ -229,7 +235,7 @@ class SimpleRAGSystem:
         return {
             "name": model_info["name"],
             "dimensions": model_info["dimensions"],
-            "model": self.embedding_model,
+            "model": self.embedding_model
         }
 
 
