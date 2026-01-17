@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 - Run the script
 ```
-python main.py
+streamlit run rag_pdf_system.py
 ```
 
 ## 🐳 Running with Docker
