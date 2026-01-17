@@ -13,7 +13,7 @@ This project implements a **Retrieval-Augmented Generation (RAG)** pipeline for 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/pdf-rag-system.git
+   git clone -b feature/Optimize_PDF_RAG_system https://github.com/alexanderPeregrina/gen_ai_apps.git
    cd pdf-rag-system
    ```
 
