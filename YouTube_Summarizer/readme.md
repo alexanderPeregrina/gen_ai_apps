@@ -38,6 +38,12 @@ ffmpeg -version
 
 ## Running Locally (Virtual Environment)
 
+### **Clone the repository**
+   ```bash
+   git clone -b feature/Optimize_PDF_RAG_system https://github.com/alexanderPeregrina/gen_ai_apps.git
+   cd YouTube_Summarizer
+   ```
+
 ### Create a virtual environment (Python 3.11)
 
 ```
