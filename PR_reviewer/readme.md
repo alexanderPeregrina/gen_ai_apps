@@ -10,6 +10,9 @@ The agent automatically analyzes code changes and posts review comments on GitHu
 An example of a Pull Request reviewed by this agent can be found here:  
 [PR #1 in gen_ai_apps](https://github.com/alexanderPeregrina/gen_ai_apps/pull/1)
 
+![Agent_comment](./images/example_comment.png)
+
+
 This demonstrates how the agent posts inline and summary comments automatically when triggered.
 
 ---
@@ -53,10 +56,12 @@ python PR_review_agent.py
 ```
 This starts the Flask server and exposes the /review endpoint.
 
-### Triggering ReviewsThe agent is triggered via a GET request to /review.
+### Triggering Reviews
+The agent is triggered via a GET request to /review.
 GitHub Actions automatically sends this request when the review-agent label is added to a Pull Request.
 
-Example:- Add the label review-agent to a PR.
+Example:
+- Add the label review-agent to a PR.
 - GitHub Action calls your Flask app’s /review?pr=<PR_NUMBER> endpoint.
 - The agent analyzes the PR and posts comments.
 
