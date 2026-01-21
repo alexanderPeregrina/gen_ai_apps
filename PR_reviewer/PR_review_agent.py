@@ -34,13 +34,19 @@ def review_pr():
     final_comments = []
     for i, change in enumerate(changes):
         if 'content' in change:
-            comments = reviewer_agent.review_document(change['content'], change['patch'], change['status'])
+            comments = reviewer_agent.review_document(change['content'], change['patch'], change['file_status'])
+
+            valid_lines = pr.get_valid_lines_from_diff(change['patch'])
             for key, comment in comments.items():
                 if key != 'final':
-                    print(f"Creating inline comment on PR {pr_number}, at line {key}")
-                    pr.pull_request.create_review_comment(body=comment, commit=last_commit, path= change['new_file_path'], line = int(key))
+                    requested_line = int(key)
+                    valid_line = pr.get_closest_valid_line(valid_lines, requested_line)
+                    if valid_line:
+                        print(f"Creating inline comment on PR {pr_number}, at line {valid_line}")
+                        pr.pull_request.create_review_comment(body=comment, commit=last_commit, path= change['new_file_path'], line = valid_line)
                 # Append final comments to summarize all general comments
                 else:
+                    print(key, comment)
                     final_comments.append(comment)
 
         # if last file to review ask llm to a summary
