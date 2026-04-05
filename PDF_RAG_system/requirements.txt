@@ -1,0 +1,9 @@
+streamlit==1.45.1
+chromadb==0.4.24
+numpy==1.26.4
+posthog==3.5.0
+PyPDF2==3.0.1
+requests==2.32.5
+google-cloud-aiplatform==1.64.0
+vertexai==1.64.0
+python-dotenv==0.21.0
